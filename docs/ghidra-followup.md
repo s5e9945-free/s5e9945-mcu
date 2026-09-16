@@ -21,12 +21,16 @@ The analysis extracted only a temporary `0x28000`-byte M55 window from S-Boot fi
 | Local address | Observation | Model treatment |
 |---|---|---|
 | `0x89cc` | CMD00 stores three request words across descriptor offsets `+0x24,+0x2c..+0x64`; the final stores overwrite `+0x2c,+0x30` with word3. | Neutral fields updated exactly at observed offsets. |
-| `0x8f4e..0x8f6c` | CMD04 reads a constraint from the registration array, checks `flag1a` and `outer_count`, then selects a table. | Implemented for valid arena constraints. |
+| `0x8f4e..0x8f6c` | CMD0E reads a constraint from the registration array, checks `flag1a` and `outer_count`, then selects a table. | Implemented for valid arena constraints. |
 | `0x8ef8..0x8f3c` | CMD07 serializes descriptor `+0x68` and four divided fields from `+0x40,+0x50,+0x60,+0x64`. | Packed into observed 16-bit response slots. |
 | `0x922a..0x9258` | CMD08 serializes divided descriptor `+0x3c,+0x2c,+0x24`. | Packed into observed 16-bit response slots. |
 | `0x8e02..0x8e0c` | CMD0A copies descriptor `+0x6c` into reply word1. | Implemented with neutral field name. |
-| `0x8f3e..0x8f48` | CMD0E stores request word1 at config `+0x10a8`, the word immediately before the export table. | Implemented as `field10a8`. |
+| `0x8f3e..0x8f48` | CMD0D stores request word1 at config `+0x10a8`, the word immediately before the export table. | Implemented as `field10a8`. |
 | `0x8a18` | Ordinary registration inserts constraint node `+0x08` into descriptor list `+0x74` or `+0x7c`, and node `+0x10` into the other descriptor's `+0x84` or `+0x8c`, selected by `flag28`. It also clears constraint `+0x44/+0x48` and updates counters. | Ordinary list path modeled. The branch that allocates a second `0x50`-byte object and reverses pair values, plus the ordering traversal, remain unresolved. |
 | `0x88fc` | Callback takes three pointers and branches on a selector with observed values 0, 1 and 2. It calls helpers at `0x8544` and `0x886c`. | ABI and helper effects remain unresolved; no invented callback behavior. |
+
+The TBH instruction at `0x8da6` uses PC `0x8daa` and 15 little-endian halfwords starting there. Direct calculation gives targets `00=8dc8`, `01/02/03=8e10`, `04=8f70`, `05=8f7a`, `06=8dce`, `07/08/09=8edc`, `0a/0b/0c=8de8`, `0d=8f3e`, `0e=8f4e`. This corrects the earlier target list in `RE_NOTES.md`, whose addresses were two bytes early. CMD04 calls helper `0x8544`; CMD05 calls `0x886c`; CMD06 enters the common response path directly.
+
+Further decompilation shows that `0x80b0` sends an eight-byte object through framework function pointers with selector `0x0b`. Helper `0x8544` conditionally writes descriptor words in the `+0x40` and `+0x50` regions, combines several bounds, and calls `0x82d8`. Helper `0x886c` updates another descriptor field and calls `0x862c`. The last two callees and framework effects are unresolved, so CMD04/05 remain placeholders.
 
 The Ghidra decompiler's variable types and names are provisional. In particular, the second object's purpose and the graph traversal under `0x8a18` need a control-flow review with typed structures. Runtime captures of descriptor fields after CMD00 and registration would be more useful than further static reads of the zero-filled table.

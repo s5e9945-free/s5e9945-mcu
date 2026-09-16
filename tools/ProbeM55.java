@@ -23,6 +23,11 @@ public class ProbeM55 extends GhidraScript {
                     println(String.format("%04x %s", start + off, insn.toString()));
             }
         }
+        for (int cmd = 0; cmd <= 0x0e; ++cmd) {
+            int halfword = currentProgram.getMemory().getShort(toAddr(0x8daa + 2 * cmd)) & 0xffff;
+            println(String.format("TBH cmd=%02x halfword=%04x target=%04x",
+                cmd, halfword, 0x8daa + 2 * halfword));
+        }
         byte[] b = new byte[0x10a8];
         currentProgram.getMemory().getBytes(toAddr(0x9410), b);
         println(String.format("CONFIG count=%d first_field=%02x%02x%02x%02x",

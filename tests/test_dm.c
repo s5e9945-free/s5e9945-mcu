@@ -115,7 +115,7 @@ static void test_ipc_roundtrip(void)
     assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
     assert(response.word[2] == p->value0 && response.word[3] == p->value1);
 
-    request.word[0] = 0x00000004u; /* registered constraint 0 */
+    request.word[0] = 0x0000000eu; /* registered constraint 0 */
     request.word[1] = 0u;
     assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
     assert(c->selected_index == 0);
@@ -174,10 +174,14 @@ static void test_descriptor_commands(void)
     request.word[0] = 0x0000030au;
     assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
     assert(response.word[1] == 0xdeadbeefu);
-    request.word[0] = 0x0000000eu;
+    request.word[0] = 0x0000000du;
     request.word[1] = 0x13572468u;
     assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
     assert(state.config.field10a8 == 0x13572468u);
+    request.word[0] = 0x00000006u;
+    request.word[1] = 0x24681357u;
+    assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+    assert(response.word[1] == request.word[1]);
 }
 
 static void test_arena_bounds(void)

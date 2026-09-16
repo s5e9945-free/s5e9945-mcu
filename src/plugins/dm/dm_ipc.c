@@ -134,7 +134,7 @@ static int cmd03_commit(struct dm_state *state,
     return DM_OK;
 }
 
-static int cmd04_select_table(struct dm_state *state,
+static int cmd0e_select_table(struct dm_state *state,
                               const struct dm_ipc_words *request)
 {
     const uint32_t index = dm_ipc_domain(request);
@@ -196,7 +196,7 @@ static struct dm_constraint *selected_registered(struct dm_state *state,
 {
     if (index >= state->count)
         return NULL;
-    /* CMD04 addresses the registration array directly. */
+    /* CMD0E addresses the registration array directly. */
     return dm_constraint_at(state, state->registered[index]);
 }
 
@@ -255,9 +255,10 @@ int dm_ipc_handler(struct dm_state *state, const struct dm_ipc_words *request,
     case 0x01: return cmd01_create(state, request);
     case 0x02: return cmd02_write_pair(state, request);
     case 0x03: return cmd03_commit(state, request, response);
-    case 0x04: return cmd04_select_table(state, request);
-    case 0x05: /* DM_CMD_05 */ return DM_UNKNOWN;
-    case 0x06: /* DM_CMD_06 */ return DM_UNKNOWN;
+    case 0x04: /* 0x8f70 calls unresolved helper 0x8544. */ return DM_UNKNOWN;
+    case 0x05: /* 0x8f7a calls unresolved helper 0x886c. */ return DM_UNKNOWN;
+    case 0x06: /* TBH goes directly to common response path 0x8dce. */
+        return DM_OK;
     case 0x07: return cmd07_serialize(state, request, response);
     case 0x08: return cmd08_serialize(state, request, response);
     case 0x09: /* DM_CMD_09: other list family */ return DM_UNKNOWN;
@@ -268,10 +269,11 @@ int dm_ipc_handler(struct dm_state *state, const struct dm_ipc_words *request,
         return DM_OK;
     case 0x0b: return cmd0b_metadata(state, request, response);
     case 0x0c: return cmd0c_read_pair(state, request, response);
-    case 0x0d: /* DM_CMD_0D */ return DM_UNKNOWN;
-    case 0x0e: /* 0x8f3e..0x8f48: word1 to config +0x10a8. */
+    case 0x0d: /* 0x8f3e..0x8f48: word1 to config +0x10a8. */
         state->config.field10a8 = request->word[1];
         return DM_OK;
+    case 0x0e: /* 0x8f4e..0x8f6c: select registered table. */
+        return cmd0e_select_table(state, request);
     default: return DM_UNKNOWN;
     }
 }

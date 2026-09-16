@@ -13,7 +13,15 @@ public class DecompileM55 extends GhidraScript {
             currentProgram.getProgramContext().setValue(tmode, toAddr(0x8000), toAddr(0x9347), BigInteger.ONE);
         DecompInterface decompiler = new DecompInterface();
         decompiler.openProgram(currentProgram);
-        int[] starts = {0x88fc, 0x89cc, 0x8a18};
+        String[] args = getScriptArgs();
+        int[] starts;
+        if (args.length == 0) {
+            starts = new int[] {0x88fc, 0x89cc, 0x8a18};
+        } else {
+            starts = new int[args.length];
+            for (int i = 0; i < args.length; ++i)
+                starts[i] = Integer.decode(args[i]);
+        }
         for (int start : starts) {
             Address address = toAddr(start);
             disassemble(address);
