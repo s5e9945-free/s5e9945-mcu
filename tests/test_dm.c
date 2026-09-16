@@ -14,6 +14,13 @@ static void fatal_hook(void *user, const char *label)
 static struct dm_state state;
 static const struct dm_platform platform = { .fatal = fatal_hook };
 
+static uint32_t descriptor_word(const struct dm_domain_desc *d, size_t offset)
+{
+    uint32_t value;
+    memcpy(&value, (const uint8_t *)d + offset, sizeof(value));
+    return value;
+}
+
 static void test_layout_and_domains(void)
 {
     static const char *const names[DM_DOMAIN_COUNT] = {
@@ -156,6 +163,13 @@ static void test_descriptor_commands(void)
     assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
     assert(d->field40 == 123456u && d->field50 == 3000u);
     assert(d->field60 == 123456u && d->field64 == 3000u);
+    assert(descriptor_word(d, 0x24u) == 65536u);
+    assert(descriptor_word(d, 0x2cu) == 65536u);
+    assert(descriptor_word(d, 0x30u) == 65536u);
+    assert(descriptor_word(d, 0x34u) == 123456u);
+    assert(descriptor_word(d, 0x38u) == 123456u);
+    assert(descriptor_word(d, 0x44u) == 123456u);
+    assert(descriptor_word(d, 0x54u) == 3000u);
     d->field68 = 0x12345678u;
     request.word[0] = 0x00000307u;
     request.word[3] = 0xabcd0000u;

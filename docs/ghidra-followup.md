@@ -15,6 +15,7 @@ The analysis extracted only a temporary `0x28000`-byte M55 window from S-Boot fi
 - The candidate S5E9945 ACPM block is `0xca000..0x116000`, exactly `0x4c000` bytes. It has plausible M23 vector tables at relative `0` and `0x16000`. The M55 begins `0x4000` bytes after this candidate block ends.
 - The separate Exynos 990 ACPM dump is also `0x4c000` bytes. Its first four words are `0xe800, 0x3261, 0x3281, 0x3287`; another vector-like header appears at `0x3f000`. Similar size and multiple vector tables support comparing container layout only. They do **not** identify the S5E9945 M55 subsystem.
 - The M55 config at local `0x9410` starts with count 28. All 28 static descriptor words `+0x40,+0x50,+0x60,+0x64,+0x68,+0x6c` are zero. The four CPU descriptors alone have `+0x70 = 1`; MIF and INT both have `+0x00 = 0x101`. The export words at `0xa4bc` match `docs/RE_NOTES.md`. The config tail at `0xa4b8` starts at zero.
+- A raw word sequence near M55 local `0x19e4` contains `0x70084000, 0x5000, 0x70089000, 0xd000, 0x70096000, 0x3000, 0x70099000, 0x4000, 0x7009d000, 0x7000`. Another sequence after `CORTEXM55` at local `0x310c` contains `0x70080000, 0x7000, 0x70084000, 0x20000, 0x700a4000`. Their record format and boot-time use are unproven; these are values only.
 
 ## DM instruction findings
 
