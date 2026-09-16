@@ -10,6 +10,8 @@ Confirmed observations represented here include the 28 descriptors and their obs
 
 Unknown framework calls, external-request ABI, graph ordering, the additional constraint path, and IPC commands with incomplete control flow stay explicit placeholders. CMD07 and CMD08 pack observed descriptor fields into 16-bit response slots, using the disassembly's division by 1000 where shown. No MMIO is touched. [The Ghidra follow-up](docs/ghidra-followup.md) records the input hashes and new byte-level findings.
 
+[The boot component inventory](docs/boot-components.md) records the additional boot files examined alongside S-Boot and their relevance to the ACPM/M55 question.
+
 `include/dm.h` uses 32-bit target addresses even on a 64-bit host. The simulated arena maps those addresses into host memory. The target's observed `memlack` fatal loop is represented by a platform fatal hook, so host tests return safely.
 
 ## Build and test
