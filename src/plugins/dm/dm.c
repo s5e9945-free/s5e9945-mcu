@@ -52,13 +52,14 @@ void dm_plugin_start(struct dm_state *state, const struct dm_platform *platform)
 /* Local 0x80ac, runtime 0x700840ac: movs r0,#0; bx lr. */
 int dm_return_zero_stub(void) { return 0; }
 
-/* Local 0x88fc, runtime 0x700848fc. ABI and effects unresolved. */
-int dm_external_request(struct dm_state *state, const struct dm_ipc_words *request,
-                        struct dm_ipc_words *response)
+/* Local 0x88fc, runtime 0x700848fc. Three pointer arguments are visible,
+ * but the framework calling contract and helper effects remain unresolved. */
+int dm_external_request(void *unknown_arg0, void *unknown_arg1,
+                        void *unknown_arg2)
 {
-    (void)state;
-    (void)request;
-    (void)response;
+    (void)unknown_arg0;
+    (void)unknown_arg1;
+    (void)unknown_arg2;
     return DM_UNKNOWN;
 }
 

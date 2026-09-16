@@ -33,7 +33,9 @@ static void test_layout_and_domains(void)
     assert(state.config.count == 28);
     assert(M55_DM_CONFIG_ADDR + offsetof(struct dm_config, domain) ==
            M55_DM_DESCRIPTOR_ADDR);
-    assert(M55_DM_CONFIG_ADDR + sizeof(struct dm_config) == 0x700864b8u);
+    assert(M55_DM_CONFIG_ADDR + offsetof(struct dm_config, field10a8) ==
+           0x700864b8u);
+    assert(M55_DM_CONFIG_ADDR + sizeof(struct dm_config) == M55_DM_EXPORT_ADDR);
     assert(dm_exports.config == M55_DM_CONFIG_ADDR);
     assert(dm_exports.ipc_handler_thumb == 0x70084d75u);
     assert(dm_exports.return_zero_thumb == 0x700840adu);
@@ -62,13 +64,13 @@ static void test_ipc_roundtrip(void)
     struct dm_constraint *c;
     struct dm_pair *p;
     request.word[0] = 0x00000301u;
-    /* word1: id=0x4a, flags+outer=0x2d, selected=1, inner=3 */
-    request.word[1] = 0x03012d4au;
+    /* word1: id=7, flags+outer=0x2d, selected=1, inner=3 */
+    request.word[1] = 0x03012d07u;
     assert(dm_ipc_command(&request) == 1);
     assert(dm_ipc_domain(&request) == 3);
     assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
     c = dm_arena_ptr(&state, state.current_constraint, sizeof(*c));
-    assert(c && c->domain0 == 3 && c->id_or_domain1 == 0x4a);
+    assert(c && c->domain0 == 3 && c->id_or_domain1 == 7);
     assert(c->flag28 == 1 && c->flag18 == 0 && c->flag19 == 1 &&
            c->flag1a == 1);
     assert(c->outer_count == 2 && c->selected_index == 1 && c->inner_count == 3);
@@ -76,7 +78,7 @@ static void test_ipc_roundtrip(void)
     assert(state.arena_offset == 0x50u + 2u * 4u + 2u * 3u * 8u);
 
     request.word[0] = 0x00000302u;
-    request.word[1] = 0x0210124au; /* pair 2, table 1 in byte2 high nibble */
+    request.word[1] = 0x02101207u; /* pair 2, table 1 in byte2 high nibble */
     request.word[2] = 0x12345678u;
     request.word[3] = 0x9abcdef0u;
     assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
@@ -91,13 +93,17 @@ static void test_ipc_roundtrip(void)
     assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
     assert((response.word[1] & 0xffu) == 0 && state.count == 1);
     assert(state.registered[0] == state.current_constraint);
+    assert(state.config.domain[3].list7c.next == state.current_constraint + 8u);
+    assert(state.config.domain[7].list8c.next == state.current_constraint + 0x10u);
+    assert(state.config.domain[3].unknown6c == 1u);
+    assert(state.config.domain[7].field68 == 1u);
 
     c->field44 = 0x11223344u;
     c->field48 = 0x55667788u;
     request.word[0] = 0x0000030bu;
     request.word[1] = 0x00000f00u; /* registered index 0; flags overwrite low nibble */
     assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
-    assert((response.word[1] & 0xffu) == 0x4au);
+    assert((response.word[1] & 0xffu) == 7u);
     assert(((response.word[1] >> 8) & 0x0fu) == 0x0du);
     assert((response.word[1] & 0x0000f000u) == 0);
     assert(((response.word[1] >> 16) & 0xffu) == 0x12u);
@@ -108,23 +114,70 @@ static void test_ipc_roundtrip(void)
     request.word[1] = 0x00020100u; /* constraint 0, table 1, pair 2 */
     assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
     assert(response.word[2] == p->value0 && response.word[3] == p->value1);
+
+    request.word[0] = 0x00000004u; /* registered constraint 0 */
+    request.word[1] = 0u;
+    assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+    assert(c->selected_index == 0);
+    {
+        m55_addr_t *tables = dm_arena_ptr(&state, c->tables, 8);
+        assert(tables && c->selected_table == tables[0]);
+    }
+
+    /* A second constraint uses list74. CMD0B traverses list74, then list7c. */
+    request.word[0] = 0x00000301u;
+    request.word[1] = 0x01001007u;
+    assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+    request.word[0] = 0x00000303u;
+    assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+    assert(state.count == 2);
+    assert(state.config.domain[3].list74.next == state.current_constraint + 8u);
+    request.word[0] = 0x0000030bu;
+    request.word[1] = 0u;
+    assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+    assert(((response.word[1] >> 8) & 0x0fu) == 0u);
+    request.word[1] = 0x00001000u; /* second entry in the combined lists */
+    assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+    assert(((response.word[1] >> 8) & 0x0fu) == 0x0du);
+    request.word[0] = 0x0000030cu;
+    request.word[1] = 0x00020101u; /* constraint 1, table 1, pair 2 */
+    assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+    assert(response.word[2] == p->value0 && response.word[3] == p->value1);
 }
 
-static void test_cmd07(void)
+static void test_descriptor_commands(void)
 {
     struct dm_ipc_words request = {{0}}, response = {{0}};
     struct dm_domain_desc *d = &state.config.domain[3];
-    d->field40 = 123456;
-    d->field50 = 999;
-    d->field60 = 3000;
-    d->field64 = 0x00010000u;
+    request.word[0] = 0x00000300u;
+    request.word[1] = 123456u;
+    request.word[2] = 3000u;
+    request.word[3] = 65536u;
+    assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+    assert(d->field40 == 123456u && d->field50 == 3000u);
+    assert(d->field60 == 123456u && d->field64 == 3000u);
     d->field68 = 0x12345678u;
     request.word[0] = 0x00000307u;
     request.word[3] = 0xabcd0000u;
     assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
     assert(response.word[1] == ((123u << 16) | 0x5678u));
-    assert(response.word[2] == (3u << 16));
-    assert(response.word[3] == (0xabcdu << 16 | 65u));
+    assert(response.word[2] == (123u << 16 | 3u));
+    assert(response.word[3] == (0xabcdu << 16 | 3u));
+
+    request.word[0] = 0x00000308u;
+    request.word[2] = 0xabcd0000u;
+    assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+    assert(response.word[1] == (65u << 16 | 123u));
+    assert(response.word[2] == (0xabcdu << 16 | 65u));
+
+    d->unknown6c = 0xdeadbeefu;
+    request.word[0] = 0x0000030au;
+    assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+    assert(response.word[1] == 0xdeadbeefu);
+    request.word[0] = 0x0000000eu;
+    request.word[1] = 0x13572468u;
+    assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+    assert(state.config.field10a8 == 0x13572468u);
 }
 
 static void test_arena_bounds(void)
@@ -151,7 +204,7 @@ int main(void)
 {
     test_layout_and_domains();
     test_ipc_roundtrip();
-    test_cmd07();
+    test_descriptor_commands();
     test_arena_bounds();
     puts("dm tests passed");
     return 0;

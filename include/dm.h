@@ -39,6 +39,7 @@ struct dm_config {
     uint32_t count;
     uint8_t unknown04_77[0x74];
     struct dm_domain_desc domain[DM_DOMAIN_COUNT];
+    uint32_t field10a8;
 };
 
 struct dm_constraint {
@@ -88,7 +89,8 @@ _Static_assert(offsetof(struct dm_domain_desc, list7c) == 0x7c, "descriptor list
 _Static_assert(offsetof(struct dm_domain_desc, list84) == 0x84, "descriptor list84");
 _Static_assert(offsetof(struct dm_domain_desc, list8c) == 0x8c, "descriptor list8c");
 _Static_assert(offsetof(struct dm_config, domain) == 0x78, "config descriptors");
-_Static_assert(sizeof(struct dm_config) == 0x10a8, "config size through descriptors");
+_Static_assert(offsetof(struct dm_config, field10a8) == 0x10a8, "config tail");
+_Static_assert(sizeof(struct dm_config) == 0x10ac, "config through export table");
 _Static_assert(sizeof(struct dm_constraint) == 0x50, "target constraint");
 _Static_assert(offsetof(struct dm_constraint, node0) == 0x08, "constraint node0");
 _Static_assert(offsetof(struct dm_constraint, node1) == 0x10, "constraint node1");
@@ -112,7 +114,7 @@ enum dm_result { DM_OK = 0, DM_UNKNOWN = -1, DM_INVALID = -2, DM_MEMLACK = -3 };
 struct dm_platform {
     void (*log)(void *user, const char *observed_label);
     void (*fatal)(void *user, const char *observed_label);
-    /* Unknown framework operation at local 0x8a18. */
+    /* Optional hook for unmodeled graph/reverse-object work at 0x8a18. */
     int (*register_constraint)(void *user, uint32_t domain,
                                m55_addr_t constraint);
     void *user;
@@ -132,8 +134,10 @@ extern const struct dm_export_table dm_exports;
 
 void dm_plugin_start(struct dm_state *state, const struct dm_platform *platform);
 int dm_return_zero_stub(void);
-int dm_external_request(struct dm_state *state, const struct dm_ipc_words *request,
-                        struct dm_ipc_words *response);
+/* Host-only stand-in: r0/r1/r2 are observed pointers; pointee roles and
+ * framework helpers are not established. */
+int dm_external_request(void *unknown_arg0, void *unknown_arg1,
+                        void *unknown_arg2);
 int dm_register_constraint(struct dm_state *state, m55_addr_t constraint);
 int dm_ipc_handler(struct dm_state *state, const struct dm_ipc_words *request,
                    struct dm_ipc_words *response);
