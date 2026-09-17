@@ -19,7 +19,9 @@ struct dm_domain_desc {
     uint32_t index;
     char name[16];
     uint32_t global_id;
-    uint8_t unknown1c_3f[0x24];
+    uint32_t order_index;
+    uint32_t incoming_count;
+    uint8_t unknown24_3f[0x1c];
     uint32_t field40;
     uint8_t unknown44_4f[0x0c];
     uint32_t field50;
@@ -37,7 +39,8 @@ struct dm_domain_desc {
 
 struct dm_config {
     uint32_t count;
-    uint8_t unknown04_77[0x74];
+    uint32_t order_count;
+    uint32_t order[DM_DOMAIN_COUNT];
     struct dm_domain_desc domain[DM_DOMAIN_COUNT];
     uint32_t field10a8;
 };
@@ -78,6 +81,8 @@ _Static_assert(sizeof(struct list_head) == 8, "target list head");
 _Static_assert(sizeof(struct dm_domain_desc) == 0x94, "target descriptor");
 _Static_assert(offsetof(struct dm_domain_desc, name) == 0x08, "descriptor name");
 _Static_assert(offsetof(struct dm_domain_desc, global_id) == 0x18, "descriptor ID");
+_Static_assert(offsetof(struct dm_domain_desc, order_index) == 0x1c, "descriptor order index");
+_Static_assert(offsetof(struct dm_domain_desc, incoming_count) == 0x20, "descriptor incoming count");
 _Static_assert(offsetof(struct dm_domain_desc, field40) == 0x40, "descriptor field40");
 _Static_assert(offsetof(struct dm_domain_desc, field50) == 0x50, "descriptor field50");
 _Static_assert(offsetof(struct dm_domain_desc, field60) == 0x60, "descriptor field60");
@@ -89,6 +94,8 @@ _Static_assert(offsetof(struct dm_domain_desc, list7c) == 0x7c, "descriptor list
 _Static_assert(offsetof(struct dm_domain_desc, list84) == 0x84, "descriptor list84");
 _Static_assert(offsetof(struct dm_domain_desc, list8c) == 0x8c, "descriptor list8c");
 _Static_assert(offsetof(struct dm_config, domain) == 0x78, "config descriptors");
+_Static_assert(offsetof(struct dm_config, order_count) == 0x04, "config order count");
+_Static_assert(offsetof(struct dm_config, order) == 0x08, "config order");
 _Static_assert(offsetof(struct dm_config, field10a8) == 0x10a8, "config tail");
 _Static_assert(sizeof(struct dm_config) == 0x10ac, "config through export table");
 _Static_assert(sizeof(struct dm_constraint) == 0x50, "target constraint");
@@ -114,7 +121,7 @@ enum dm_result { DM_OK = 0, DM_UNKNOWN = -1, DM_INVALID = -2, DM_MEMLACK = -3 };
 struct dm_platform {
     void (*log)(void *user, const char *observed_label);
     void (*fatal)(void *user, const char *observed_label);
-    /* Optional hook for unmodeled graph/reverse-object work at 0x8a18. */
+    /* Optional integration hook invoked before the modeled 0x8a18 work. */
     int (*register_constraint)(void *user, uint32_t domain,
                                m55_addr_t constraint);
     void *user;

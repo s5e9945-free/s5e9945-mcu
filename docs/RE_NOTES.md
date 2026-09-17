@@ -250,8 +250,18 @@ CMD02 writes one pair into `current_constraint->tables[table][index]` after doma
 CMD03 verifies current constraint domain, calls local `0x8A18` (working name `dm_register_constraint`),
 stores constraint pointer into global array `70086508[count]`, returns count in response byte0, increments `70086588`.
 
-Local `0x8A18` connects/registers constraints using domain lists. Code later resembles dependency/topological traversal;
-"Kahn-style topological sort" is a strong inference, not an original function name.
+Local `0x8A18` connects/registers constraints using domain lists. For ordinary links
+(`flag28=0`), target descriptor `+0x20` counts incoming links. The routine rebuilds
+a topological order: config `+0x04` is the queue length, config `+0x08` stores
+domain indices, and descriptor `+0x1c` stores each emitted position. Only the
+source-side `+0x74` lists contribute outgoing edges. These roles are supported
+by the decompiled reads and writes; the function name is a working name.
+
+When `flag18=1` and `flag28=0`, `0x8A18` allocates a second `0x50`-byte
+constraint and `inner_count` reversed pairs from the selected table. The second
+constraint swaps the two domains, sets flags `+0x18` and `+0x28`, links into
+the original target's `+0x7c` and source's `+0x8c` lists, and is recorded in
+the original constraint's `+0x4c` word. Its `+0x44/+0x48` words are `UINT32_MAX`.
 
 CMD0B traverses descriptor list heads +74/+7C and serializes constraint metadata.
 It is close to an inverse of CMD01:
@@ -265,12 +275,18 @@ CMD0C traverses same family and returns an 8-byte pair.
 Indices from request word1:
 bits0..7 constraint index; bits8..15 table index; bits16..23 pair index.
 
-CMD09 traverses the other list family (+84/+8C). Exact semantics provisional.
+CMD09 traverses the target-side lists (+84/+8C), selects by request word1,
+and serializes the selected constraint's source domain, two flags, and six
+divided-by-1000 values. See `ghidra-followup.md` for the exact field mapping.
 
 CMD07 reads descriptor +40/+50/+60/+64/+68 and uses magic `0x10624DD3` with UMULL/shift,
 consistent with division by 1000. Exact field semantics remain unknown.
 
-Commands 04/05/06/0D/0E must not be called no-ops without further CFG evidence.
+CMD04 calls `0x8544`, then `0x82d8`; CMD05 calls `0x886c`, then `0x862c`.
+Both latter helpers propagate values across descriptor lists and pair tables.
+Their framework effects are unresolved. CMD06 reaches the response path
+directly; CMD0D stores request word1 at config `+0x10a8`; CMD0E selects a
+table on a registered constraint when `flag1a` permits it.
 
 ## Analysis caveat
 Ghidra was imported raw ARMv8-M with no global auto-analysis. A range script seeded Thumb every 2 bytes,

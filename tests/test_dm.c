@@ -104,6 +104,9 @@ static void test_ipc_roundtrip(void)
     assert(state.config.domain[7].list8c.next == state.current_constraint + 0x10u);
     assert(state.config.domain[3].unknown6c == 1u);
     assert(state.config.domain[7].field68 == 1u);
+    assert(state.config.domain[7].incoming_count == 0u);
+    assert(state.config.order_count == 2u);
+    assert(state.config.order[0] == 3u && state.config.order[1] == 7u);
 
     c->field44 = 0x11223344u;
     c->field48 = 0x55667788u;
@@ -139,6 +142,10 @@ static void test_ipc_roundtrip(void)
     assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
     assert(state.count == 2);
     assert(state.config.domain[3].list74.next == state.current_constraint + 8u);
+    assert(state.config.domain[7].incoming_count == 1u);
+    assert(state.config.order_count == 2u);
+    assert(state.config.domain[3].order_index == 0u);
+    assert(state.config.domain[7].order_index == 1u);
     request.word[0] = 0x0000030bu;
     request.word[1] = 0u;
     assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
@@ -150,6 +157,44 @@ static void test_ipc_roundtrip(void)
     request.word[1] = 0x00020101u; /* constraint 1, table 1, pair 2 */
     assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
     assert(response.word[2] == p->value0 && response.word[3] == p->value1);
+
+    /* CMD09 enumerates target-side list84 before list8c. The second
+     * constraint is first, while the original flag28 constraint is second. */
+    {
+        struct dm_domain_desc *source = &state.config.domain[3];
+        struct dm_constraint *second = dm_arena_ptr(&state,
+                                              state.current_constraint,
+                                              sizeof(*second));
+        uint32_t value;
+        assert(second);
+        source->field40 = 11000u;
+        source->field50 = 22000u;
+        source->field60 = 33000u;
+        source->field64 = 44000u;
+        value = 55000u;
+        memcpy((uint8_t *)source + 0x2cu, &value, sizeof(value));
+        value = 66000u;
+        memcpy((uint8_t *)source + 0x3cu, &value, sizeof(value));
+        second->field44 = 77000u;
+        second->field48 = 88000u;
+        c->field44 = 99000u;
+        c->field48 = 111000u;
+        request.word[0] = 0xa5a50709u;
+        request.word[1] = 0u;
+        assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+        assert(response.word[0] == 0xa5a50309u);
+        assert(response.word[1] == (66u << 16 | 77u));
+        assert(response.word[2] == (88u << 16 | 55u));
+        assert(response.word[3] == (33u << 16 | 11u));
+        request.word[1] = 1u;
+        assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+        assert(response.word[0] == 0xa5a58309u);
+        assert(response.word[1] == (66u << 16 | 99u));
+        assert(response.word[2] == (111u << 16 | 55u));
+        assert(response.word[3] == (44u << 16 | 22u));
+        request.word[1] = 2u;
+        assert(dm_ipc_handler(&state, &request, &response) == DM_INVALID);
+    }
 }
 
 static void test_descriptor_commands(void)
@@ -198,6 +243,69 @@ static void test_descriptor_commands(void)
     assert(response.word[1] == request.word[1]);
 }
 
+static void test_order_cycle(void)
+{
+    struct dm_ipc_words request = {{0}}, response = {{0}};
+    dm_plugin_start(&state, &platform);
+    request.word[0] = 0x00000301u;
+    request.word[1] = 0x01001007u; /* ordinary edge 3 -> 7 */
+    assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+    request.word[0] = 0x00000303u;
+    assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+    assert(state.config.order_count == 2u);
+    request.word[0] = 0x00000701u;
+    request.word[1] = 0x01001003u; /* ordinary edge 7 -> 3 */
+    assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+    request.word[0] = 0x00000703u;
+    assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+    assert(state.config.domain[3].incoming_count == 1u);
+    assert(state.config.domain[7].incoming_count == 1u);
+    assert(state.config.order_count == 0u);
+}
+
+static void test_reverse_constraint(void)
+{
+    struct dm_ipc_words request = {{0}}, response = {{0}};
+    struct dm_constraint *original, *reverse;
+    struct dm_pair *pairs;
+    dm_plugin_start(&state, &platform);
+    request.word[0] = 0x00000301u;
+    request.word[1] = 0x02001207u; /* domain 3 -> 7; flag18; two pairs */
+    assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+    original = dm_arena_ptr(&state, state.current_constraint, sizeof(*original));
+    assert(original);
+    request.word[0] = 0x00000302u;
+    request.word[1] = 0u;
+    request.word[2] = 12000u;
+    request.word[3] = 34000u;
+    assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+    request.word[1] = 0x01000000u;
+    request.word[2] = 56000u;
+    request.word[3] = 78000u;
+    assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+    request.word[0] = 0x00000303u;
+    assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+    reverse = dm_arena_ptr(&state, original->runtime_object, sizeof(*reverse));
+    assert(reverse);
+    assert(reverse->domain0 == 7u && reverse->id_or_domain1 == 3u);
+    assert(reverse->flag18 == 1u && reverse->flag28 == 1u);
+    assert(reverse->inner_count == 2u);
+    assert(reverse->field44 == UINT32_MAX && reverse->field48 == UINT32_MAX);
+    assert(state.config.domain[7].list7c.next == original->runtime_object + 8u);
+    assert(state.config.domain[3].list8c.next == original->runtime_object + 0x10u);
+    pairs = dm_arena_ptr(&state, reverse->selected_table, 2u * sizeof(*pairs));
+    assert(pairs && pairs[0].value0 == 34000u && pairs[0].value1 == 12000u);
+    assert(pairs[1].value0 == 78000u && pairs[1].value1 == 56000u);
+    assert(state.config.domain[3].field68 == 1u);
+    assert(state.config.domain[7].unknown6c == 1u);
+    assert(state.config.order_count == 2u);
+    assert(state.config.order[0] == 3u && state.config.order[1] == 7u);
+    request.word[0] = 0x00000309u;
+    request.word[1] = 0u;
+    assert(dm_ipc_handler(&state, &request, &response) == DM_OK);
+    assert(response.word[0] == 0x0000c709u);
+}
+
 static void test_arena_bounds(void)
 {
     struct dm_ipc_words request = {{0}}, response = {{0}};
@@ -223,6 +331,8 @@ int main(void)
     test_layout_and_domains();
     test_ipc_roundtrip();
     test_descriptor_commands();
+    test_order_cycle();
+    test_reverse_constraint();
     test_arena_bounds();
     puts("dm tests passed");
     return 0;

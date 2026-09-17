@@ -191,6 +191,32 @@ static int cmd08_serialize(struct dm_state *state,
     return DM_OK;
 }
 
+static int cmd09_serialize(struct dm_state *state,
+                           const struct dm_ipc_words *request,
+                           struct dm_ipc_words *response)
+{
+    /* 0x911c..0x920e: word1 is an index across target-side +0x84/+0x8c
+     * lists. The selected constraint's source domain supplies descriptor
+     * values; the two constraint words occupy the other response halves. */
+    struct dm_constraint *c = dm_constraint_in_target_list(state,
+                                 dm_ipc_domain(request), request->word[1]);
+    const struct dm_domain_desc *d;
+    uint32_t flags;
+    if (!c || c->domain0 >= DM_DOMAIN_COUNT)
+        return DM_INVALID;
+    d = &state->config.domain[c->domain0];
+    flags = ((c->flag18 & 1u) << 6) | ((c->flag28 & 1u) << 7);
+    response->word[0] = (response->word[0] & 0xffff00ffu) |
+                        (((c->domain0 & 0x3fu) | flags) << 8);
+    response->word[1] = ((desc_read_word(d, 0x3cu) / 1000u) << 16) |
+                        ((c->field44 / 1000u) & 0xffffu);
+    response->word[2] = ((c->field48 / 1000u) << 16) |
+                        ((desc_read_word(d, 0x2cu) / 1000u) & 0xffffu);
+    response->word[3] = (((c->flag28 ? d->field64 : d->field60) / 1000u) << 16) |
+                        (((c->flag28 ? d->field50 : d->field40) / 1000u) & 0xffffu);
+    return DM_OK;
+}
+
 static struct dm_constraint *selected_registered(struct dm_state *state,
                                                   uint8_t index)
 {
@@ -261,7 +287,7 @@ int dm_ipc_handler(struct dm_state *state, const struct dm_ipc_words *request,
         return DM_OK;
     case 0x07: return cmd07_serialize(state, request, response);
     case 0x08: return cmd08_serialize(state, request, response);
-    case 0x09: /* DM_CMD_09: other list family */ return DM_UNKNOWN;
+    case 0x09: return cmd09_serialize(state, request, response);
     case 0x0a: /* 0x8e02..0x8e0c: descriptor +0x6c to word1. */
         if (dm_ipc_domain(request) >= DM_DOMAIN_COUNT)
             return DM_INVALID;
